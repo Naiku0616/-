@@ -1,0 +1,47 @@
+
+
+**步骤1：安装依赖库**
+```bash
+pip install ip2region
+```
+
+**步骤2：下载IP数据库文件**
+```bash
+wget https://github.com/lionsoul2014/ip2region/raw/master/data/ip2region.db
+```
+将下载的`ip2region.db`文件放置在与Python脚本相同的目录下。
+
+**步骤3：修改代码异常处理逻辑**
+在代码的导入部分添加更明确的错误处理：
+```python
+try:
+    # 其他导入...
+    from ip2region import Ip2Region
+except ImportError as e:
+    print(f"关键依赖缺失: {e}")
+    print("请执行安装命令：pip install ip2region")
+    Ip2Region = None  # 显式声明为None防止NameError
+except Exception as e:
+    print(f"初始化异常: {e}")
+    Ip2Region = None
+```
+
+**步骤4：验证安装结果**
+```python
+# 在代码初始化部分添加验证
+if Ip2Region is None:
+    print("IP定位功能不可用，请检查ip2region安装")
+else:
+    print("IP定位功能已启用")
+```
+
+完成上述步骤后，程序将不再出现`NameError`错误。若仍需使用地理定位功能，请确保：
+1. 已正确安装`ip2region`库
+2. `ip2region.db`文件存在于项目根目录
+3. 文件路径权限可读
+
+如不打算使用IP定位功能，可直接注释相关代码：
+```python
+# self.searcher = Ip2Region("ip2region.db") if os.path.exists("ip2region.db") else None
+self.searcher = None  # 禁用IP定位功能
+```

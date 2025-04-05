@@ -1,0 +1,183 @@
+    def display_analytics(self):
+        """显示数据分析"""
+        if not self.votes:
+            messagebox.showerror("错误" if self.language == "中文" else "Error",
+                                 "尚无投票数据！" if self.language == "中文" else "No voting data yet!")
+            return
+
+        self.generate_result_charts()
+
+        analytics_window = tk.Toplevel(self.root)
+        analytics_window.title("数据分析" if self.language == "中文" else "Analytics")
+        analytics_window.geometry("1400x900")
+
+        notebook = ttk.Notebook(analytics_window)
+
+        image_frame = ttk.Frame(notebook)
+        self.show_result_images(image_frame)
+
+        table_frame = ttk.Frame(notebook)
+        self._create_results_table(table_frame)
+
+        chart_frame = ttk.Frame(notebook)
+        self._create_pie_chart(chart_frame)
+
+        trend_frame = ttk.Frame(notebook)
+        self._create_advanced_analysis(trend_frame)
+
+        notebook.add(image_frame, text="图表快照")
+        notebook.add(table_frame, text="详细数据")
+        notebook.add(chart_frame, text="图表分析")
+        notebook.add(trend_frame, text="趋势分析")
+        notebook.pack(expand=True, fill="both")
+
+    def generate_result_charts(self):
+        """生成并保存结果图表"""
+        # 饼图
+        fig = plt.figure(figsize=(8, 8))
+        total = sum(self.votes.values())
+        if total > 0:
+            labels = [f"{k} ({v}票)" for k, v in self.votes.items()]
+            sizes = [v / total for v in self.votes.values()]
+            explode = [0.1 if max(sizes) == s else 0 for s in sizes]
+
+            plt.pie(sizes, explode=explode, labels=labels, autopct='%1.1f%%',
+                    shadow=True, startangle=140, colors=StyleConfig.CHART_COLORS)
+            plt.title("投票分布" if self.language == "中文" else "Vote Distribution", fontsize=14)
+            plt.axis('equal')
+            plt.savefig("vote_pie.png", dpi=100, bbox_inches='tight')
+            plt.close()
+
+        # 趋势图
+        fig = plt.figure(figsize=(12, 6))
+        time_counts = defaultdict(int)
+        for record in self.history:
+            hour = datetime.strptime(record[1], "%Y-%m-%d %H:%M:%S").strftime("%H:00")
+            time_counts[hour] += 1
+
+        times = sorted(time_counts.keys())
+        counts = [time_counts[t] for t in times]
+
+        plt.plot(times, counts, marker='o', linestyle='-', color=StyleConfig.SECONDARY)
+        plt.fill_between(times, counts, color=StyleConfig.SECONDARY, alpha=0.2)
+        plt.title("投票趋势" if self.language == "中文" else "Voting Trend", fontsize=14)
+        plt.xlabel("时间" if self.language == "中文" else "Time", fontsize=12)
+        plt.ylabel("票数" if self.language == "中文" else "Votes", fontsize=12)
+        plt.xticks(rotation=45)
+        plt.grid(True, linestyle='--', alpha=0.7)
+        plt.savefig("vote_trend.png", dpi=100, bbox_inches='tight')
+        plt.close()
+
+    def show_result_images(self, parent):
+        """显示生成的图表图片"""
+        try:
+            img_frame = tk.Frame(parent)
+            img_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+
+            # 饼图
+            pie_img = Image.open("vote_pie.png")
+            pie_img = pie_img.resize((500, 500), Image.Resampling.LANCZOS)
+            pie_photo = ImageTk.PhotoImage(pie_img)
+            pie_label = tk.Label(img_frame, image=pie_photo)
+            pie_label.image = pie_photo
+            pie_label.pack(side=tk.LEFT, padx=20)
+
+            # 趋势图
+            trend_img = Image.open("vote_trend.png")
+            trend_img = trend_img.resize((700, 400), Image.Resampling.LANCZOS)
+            trend_photo = ImageTk.PhotoImage(trend_img)
+            trend_label = tk.Label(img_frame, image=trend_photo)
+            trend_label.image = trend_photo
+            trend_label.pack(side=tk.RIGHT, padx=20)
+        except Exception as e:
+            print(f"图片加载失败: {str(e)}")
+
+    def _create_results_table(self, parent):
+        """创建结果表格"""
+        columns = ("排名", "候选人", "票数", "占比", "最新投票理由") if self.language == "中文" else (
+            "Rank", "Candidate", "Votes", "Percentage", "Latest Vote Reason")
+        tree = ttk.Treeview(parent, columns=columns, show="headings", selectmode="none")
+        col_widths = [60, 150, 80, 100, 300]
+        for col, width in zip(columns, col_widths):
+            tree.heading(col, text=col)
+            tree.column(col, width=width, anchor="center")
+
+        total = sum(self.votes.values())
+        sorted_data = sorted(self.votes.items(), key=lambda x: -x[1])
+        for rank, (name, votes) in enumerate(sorted_data, 1):
+            percentage = f"{votes / total:.1%}" if total > 0 else "0%"
+            last_reason = next((h[3] for h in reversed(self.history) if h[2] == name), "")
+            tree.insert("", "end", values=(rank, name, votes, percentage, last_reason))
+
+        scrollbar = ttk.Scrollbar(parent, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=scrollbar.set)
+        tree.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+    def _create_pie_chart(self, parent):
+        """创建饼图"""
+        canvas = tk.Canvas(parent, bg="white", width=400, height=400)
+        canvas.pack(pady=50)
+        total = sum(self.votes.values())
+        if total == 0:
+            canvas.create_text(200, 200,
+                               text="无投票数据" if self.language == "中文" else "No voting data",
+                               font=StyleConfig.FONT_NORMAL)
+            return
+
+        colors = StyleConfig.CHART_COLORS
+        sorted_votes = sorted(self.votes.items(), key=lambda x: -x[1])
+        start_angle = 0
+
+        for idx, (name, votes) in enumerate(sorted_votes):
+            extent = 360 * votes / total
+            if idx == len(sorted_votes) - 1:
+                extent = 360 - start_angle
+            canvas.create_arc(100, 100, 300, 300,
+                              start=start_angle,
+                              extent=extent,
+                              fill=colors[idx % len(colors)],
+                              outline="white")
+            start_angle += extent
+
+    def _create_advanced_analysis(self, parent):
+        """创建高级分析图表"""
+        canvas = tk.Canvas(parent, bg="white", width=800, height=600)
+        canvas.pack(pady=20, padx=20)
+
+        if not self.history:
+            canvas.create_text(400, 300,
+                               text="暂无投票数据" if self.language == "中文" else "No voting data",
+                               font=StyleConfig.FONT_NORMAL)
+            return
+
+        time_votes = defaultdict(int)
+        for timestamp, _, _ in self.history:
+            date_str = timestamp.split()[0]
+            time_votes[date_str] += 1
+
+        dates = sorted(time_votes.keys())
+        max_votes = max(time_votes.values()) or 1
+        chart_height = 500
+        chart_width = 700
+        bar_width = chart_width // len(dates)
+
+        canvas.create_line(50, chart_height - 50, chart_width + 50, chart_height - 50, width=2)
+        canvas.create_line(50, 50, 50, chart_height - 50, width=2)
+
+        for i, date in enumerate(dates):
+            x = 50 + i * bar_width
+            y_bottom = chart_height - 50
+            vote_count = time_votes[date]
+            bar_height = (vote_count / max_votes) * (chart_height - 100)
+
+            canvas.create_rectangle(
+                x, y_bottom - bar_height, x + bar_width - 10, y_bottom,
+                fill=StyleConfig.SECONDARY,
+                outline="white"
+            )
+            canvas.create_text(x + bar_width // 2, y_bottom + 20, text=date, font=("微软雅黑", 8))
+            canvas.create_text(x - 20, y_bottom - bar_height - 10, text=str(vote_count), font=("微软雅黑", 8))
+
+        title_text = "每日投票趋势" if self.language == "中文" else "Daily Voting Trends"
+        canvas.create_text(400, 20, text=title_text, font=("微软雅黑", 14, "bold"))
